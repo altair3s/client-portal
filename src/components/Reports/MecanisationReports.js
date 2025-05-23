@@ -17,6 +17,8 @@ const parseSheetData = (sheetData) => {
 
 const MecanisationReports = () => {
   const [data, setData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
+  const [selectedLieu, setSelectedLieu] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +37,7 @@ const MecanisationReports = () => {
         if (result.values) {
           const parsedData = parseSheetData(result.values);
           setData(parsedData);
+          setFilteredData(parsedData);
         } else {
           setError('Aucune donnée trouvée');
         }
@@ -48,11 +51,60 @@ const MecanisationReports = () => {
     fetchSheetData();
   }, []);
 
+  // Filtrer les données quand le lieu sélectionné change
+  useEffect(() => {
+    if (selectedLieu === '') {
+      setFilteredData(data);
+    } else {
+      const filtered = data.filter(row => row.lieu === selectedLieu);
+      setFilteredData(filtered);
+    }
+  }, [selectedLieu, data]);
+
+  // Obtenir la liste unique des lieux
+  const getUniqueLieux = () => {
+    const lieux = data.map(row => row.lieu).filter(lieu => lieu && lieu.trim() !== '');
+    return [...new Set(lieux)].sort();
+  };
+
+  const handleLieuChange = (event) => {
+    setSelectedLieu(event.target.value);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-semibold">Comptes rendus de mécanisation</h1>
       </div>
+
+      {/* Filtre par lieu */}
+      {!loading && !error && data.length > 0 && (
+        <div className="mb-4 bg-white rounded-lg shadow p-4">
+          <div className="flex items-center gap-4">
+            <label htmlFor="lieu-filter" className="font-medium text-gray-700">
+              Filtrer par lieu :
+            </label>
+            <select
+              id="lieu-filter"
+              value={selectedLieu}
+              onChange={handleLieuChange}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="">Tous les lieux</option>
+              {getUniqueLieux().map(lieu => (
+                <option key={lieu} value={lieu}>
+                  {lieu}
+                </option>
+              ))}
+            </select>
+            {selectedLieu && (
+              <span className="text-sm text-gray-600">
+                ({filteredData.length} résultat{filteredData.length > 1 ? 's' : ''})
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow">
         <div className="p-4">
@@ -64,8 +116,10 @@ const MecanisationReports = () => {
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
-          ) : data.length === 0 ? (
-            <div>Aucune donnée disponible</div>
+          ) : filteredData.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {selectedLieu ? `Aucun compte rendu trouvé pour "${selectedLieu}"` : 'Aucune donnée disponible'}
+            </div>
           ) : (
             <div className="overflow-auto" style={{ maxHeight: '700px', maxWidth: '100%' }}>
               <table className="w-full border-collapse" style={{ boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
@@ -74,9 +128,8 @@ const MecanisationReports = () => {
                     backgroundColor: '#ea9999',
                     color: 'white',
                     textAlign: 'left',
-                    
                   }}>
-                    {Object.keys(data[0]).map((header) => (
+                    {Object.keys(filteredData[0]).map((header) => (
                       <th
                         key={header}
                         style={{
@@ -93,7 +146,7 @@ const MecanisationReports = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((row, index) => (
+                  {filteredData.map((row, index) => (
                     <tr
                       key={index}
                       style={{
