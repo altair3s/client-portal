@@ -110,7 +110,7 @@ const Sidebar = () => {
           >
             <div className="flex items-center">
               <FaChartLine className="h-5 w-5 mr-3" />
-              Comité de suivi
+              Comités de suivi
             </div>
             <FaChevronDown 
               className={`h-4 w-4 transition-transform duration-200 ${comiteSubmenuOpen ? 'transform rotate-180' : ''}`}
