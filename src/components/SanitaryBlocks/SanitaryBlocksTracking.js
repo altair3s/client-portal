@@ -330,17 +330,16 @@ const SanitaryBlocksTracking = () => {
         const dates = validData.map(item => item.dateObj).filter(Boolean).sort((a, b) => a.getTime() - b.getTime());
         const maxDate = dates[dates.length - 1] || new Date();
         
-        // Par défaut, on filtre pour les 30 derniers jours depuis la date la plus récente
-        const defaultEndDate = new Date(maxDate.getTime());
-        const defaultStartDate = new Date(maxDate.getTime());
-        defaultStartDate.setDate(defaultStartDate.getDate());
-        
+          // Par défaut, on filtre pour aujourd'hui
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+              
         // Stocker toutes les prestations avant filtrage
         setAllPrestations(validData);
         
         // Définir les dates de filtrage par défaut
-        setDateDebut(formatDateForInput(defaultStartDate));
-        setDateFin(formatDateForInput(defaultEndDate));
+        setDateDebut(formatDateForInput(today));
+        setDateFin(formatDateForInput(today));
         
         console.log("Données chargées:", validData.length, "prestations");
         

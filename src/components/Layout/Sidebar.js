@@ -7,16 +7,23 @@ import {
   FaCalendarAlt, 
   FaRestroom, 
   FaSignOutAlt, 
-  FaChevronDown 
+  FaChevronDown,
+  FaChartLine
+
 } from 'react-icons/fa';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const { logout } = useContext(AuthContext);
   const [reportsSubmenuOpen, setReportsSubmenuOpen] = useState(false);
+  const [comiteSubmenuOpen, setComiteSubmenuOpen] = useState(false);
 
   const toggleReportsSubmenu = () => {
     setReportsSubmenuOpen(!reportsSubmenuOpen);
+  };
+
+  const toggleComiteSubmenu = () => {
+    setComiteSubmenuOpen(!comiteSubmenuOpen);
   };
 
   const handleLogout = () => {
@@ -48,7 +55,7 @@ const Sidebar = () => {
           to="/" 
           end 
           className={({ isActive }) => 
-            `flex items-center py-3 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600'}`
+            `flex items-center py-3 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600'}`  
           }
         >
           <FaHome className="h-5 w-5 mr-3" />
@@ -70,43 +77,63 @@ const Sidebar = () => {
           </button>
           
           <div 
-            className={`pl-12 space-y-1 overflow-hidden transition-all duration-200 ${
-              reportsSubmenuOpen ? 'max-h-64 mt-1 mb-2' : 'max-h-0'
-            }`}
+            className={`pl-12 space-y-1 overflow-hidden transition-all duration-200 ${reportsSubmenuOpen ? 'max-h-64 mt-1 mb-2' : 'max-h-0'}`}
           >
-            
             <NavLink 
               to="/reports/vacations" 
               className={({ isActive }) => 
-                `block py-2 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600 text-blue-100'}`
-              }
+                `block py-2 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600 text-blue-100'}`}
             >
               Vacations
             </NavLink>
             <NavLink 
               to="/reports/remise-en-etat" 
               className={({ isActive }) => 
-                `block py-2 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600 text-blue-100'}`
-              }
+                `block py-2 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600 text-blue-100'}`}
             >
               Remise en état
             </NavLink>
             <NavLink 
               to="/reports/mecanisation" 
               className={({ isActive }) => 
-                `block py-2 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600 text-blue-100'}`
-              }
+                `block py-2 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600 text-blue-100'}`}
             >
               Mécanisation
             </NavLink>
           </div>
         </div>
-        
+
+        <div className="relative">
+          <button 
+            onClick={toggleComiteSubmenu}
+            className={`flex items-center justify-between w-full text-left py-3 px-4 rounded-lg transition duration-200 ${comiteSubmenuOpen ? 'bg-blue-800' : 'hover:bg-blue-600'}`}
+          >
+            <div className="flex items-center">
+              <FaChartLine className="h-5 w-5 mr-3" />
+              Comité de suivi
+            </div>
+            <FaChevronDown 
+              className={`h-4 w-4 transition-transform duration-200 ${comiteSubmenuOpen ? 'transform rotate-180' : ''}`}
+            />
+          </button>
+
+          <div 
+            className={`pl-12 space-y-1 overflow-hidden transition-all duration-200 ${comiteSubmenuOpen ? 'max-h-64 mt-1 mb-2' : 'max-h-0'}`}
+          >
+            <NavLink 
+              to="/comite/comiteavril25" 
+              className={({ isActive }) => 
+                `block py-2 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600 text-blue-100'}`}
+            >
+              Avril 2025
+            </NavLink>
+          </div>
+        </div>
+
         <NavLink 
           to="/calendar" 
           className={({ isActive }) => 
-            `flex items-center py-3 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600'}`
-          }
+            `flex items-center py-3 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600'}`}
         >
           <FaCalendarAlt className="h-5 w-5 mr-3" />
           Calendrier
@@ -115,8 +142,7 @@ const Sidebar = () => {
         <NavLink 
           to="/bs" 
           className={({ isActive }) => 
-            `flex items-center py-3 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600'}`
-          }
+            `flex items-center py-3 px-4 rounded-lg transition duration-200 ${isActive ? 'bg-blue-800 shadow-md' : 'hover:bg-blue-600'}`}
         >
           <FaRestroom className="h-5 w-5 mr-3" />
           Blocs Sanitaires

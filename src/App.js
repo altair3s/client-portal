@@ -12,6 +12,7 @@ import VacationsReports from './components/Reports/VacationsReports';
 import RemiseEnEtatReports from './components/Reports/RemiseEnEtatReports';
 import MecanisationReports from './components/Reports/MecanisationReports';
 import Calendar from './components/Calendar/Calendar';
+import Comite from './components/Reports/ComiteAvril25';
 import SanitaryBlocksTracking from './components/SanitaryBlocks/SanitaryBlocksTracking';
 import BS from './components/SanitaryBlocks/BS';
 import Login from './components/Auth/Login';
@@ -56,6 +57,9 @@ function App() {
               
               <Route path="calendar" element={<Calendar />} />
               <Route path="bs" element={<BS />} />
+              <Route path="comite">
+                <Route path="comiteavril25" element={<Comite />} />
+              </Route>
             </Route>
             
             {/* Redirection par défaut */}
