@@ -1,53 +1,55 @@
-import React, { useState, useEffect} from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import MapWrapper from './MapWrapper';
 
-// Types pour les données
-interface Prestation {
-  id: string;
-  date: string;
-  dateObj: Date | null;
-  zone: string;
-  categorie: string;
-  position: [number, number];
-  heureDebut: string;
-  heureFin: string;
-  duration: number | null;
-  formattedDuration: string;
-}
+// Fonction pour convertir les dates françaises (DD/MM/YYYY) en format Date
+const parseDate = (dateStr) => {
+  if (!dateStr) return null;
+  const [day, month, year] = dateStr.split('/').map(Number);
+  return new Date(year, month - 1, day);
+};
 
-interface BSData {
-  BS: string;
-  Date: string;
-  "Heure début": string;
-  "Heure fin": string;
-}
+// Fonction pour convertir des dates JS en format français pour l'affichage
+const formatDateForInput = (date) => {
+  if (!date) return '';
+  return date.toISOString().split('T')[0];
+};
 
-interface BSVisit {
-  date: string;
-  start: string;
-  end: string;
-  duration: number;
-}
+// Fonction pour calculer la durée entre deux heures au format "HH:MM:SS" ou "H:MM:SS"
+const calculateDuration = (startTime, endTime) => {
+  if (!startTime || !endTime) return 0;
+  
+  // Convertir les heures en minutes
+  const parseTime = (timeStr) => {
+    const [hours, minutes, seconds = '0'] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes + (Number(seconds) / 60);
+  };
+  
+  const startMinutes = parseTime(startTime);
+  const endMinutes = parseTime(endTime);
+  
+  // Gérer le cas où la fin est le lendemain
+  let durationMinutes = endMinutes - startMinutes;
+  if (durationMinutes < 0) {
+    durationMinutes += 24 * 60; // Ajouter 24 heures
+  }
+  
+  return durationMinutes;
+};
 
-interface BSStats {
-  count: number;
-  totalDuration: number;
-  lastVisit: string | null;
-  visits: BSVisit[];
-  averageDuration?: number;
-  formattedTotal?: string;
-  formattedAverage?: string;
-}
-
-
+// Fonction pour formater la durée en minutes vers "HH:MM"
+const formatDuration = (minutes) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+};
 
 // Configuration pour l'accès à Google Sheets
-const SHEET_ID = '1MivVLyMwTI7dA8SQ1oHrXLtafFjRPSNaoZ3fea94L4U';
-const API_KEY = 'AIzaSyDmcH5D5W1KtJntZfDugeBUQE-kfVcACnw';
+const SHEET_ID_BS = process.env.REACT_APP_REPORTS_SHEET_ID_BS;
+const API_KEY = process.env.REACT_APP_API_KEY;
 const RANGE = 'Data!A1:K';
 
-const BS: React.FC = () => {
+const BS = () => {
   const [allPrestations, setAllPrestations] = useState([]);
   const [filteredPrestations, setFilteredPrestations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,57 +63,14 @@ const BS: React.FC = () => {
   const [bsData, setBsData] = useState([]);
   const [bsList, setBsList] = useState([]);
   const [selectedBS, setSelectedBS] = useState("");
+  const [bsStats, setBsStats] = useState({});
   const [totalDuration, setTotalDuration] = useState("00:00");
   const [showBSAnalysis, setShowBSAnalysis] = useState(false);
-  const [bsStats, setBsStats] = useState({});
-  const statsBS = {};
-
-  // Fonction pour convertir les dates françaises (DD/MM/YYYY) en format Date
-  const parseDate = (dateStr: string): Date | null => {
-    if (!dateStr) return null;
-    const [day, month, year] = dateStr.split('/').map(Number);
-    return new Date(year, month - 1, day);
-  };
-
-  // Fonction pour convertir des dates JS en format français pour l'affichage
-  const formatDateForInput = (date: Date | null): string => {
-    if (!date) return '';
-    return date.toISOString().split('T')[0];
-  };
-
-  // Fonction pour calculer la durée entre deux heures au format "HH:MM:SS" ou "H:MM:SS"
-  const calculateDuration = (startTime: string, endTime: string): number => {
-    if (!startTime || !endTime) return 0;
-    
-    // Convertir les heures en minutes
-    const parseTime = (timeStr: string): number => {
-      const [hours, minutes, seconds = '0'] = timeStr.split(':').map(Number);
-      return hours * 60 + minutes + (Number(seconds) / 60);
-    };
-    
-    const startMinutes = parseTime(startTime);
-    const endMinutes = parseTime(endTime);
-    
-    // Gérer le cas où la fin est le lendemain
-    let durationMinutes = endMinutes - startMinutes;
-    if (durationMinutes < 0) {
-      durationMinutes += 24 * 60; // Ajouter 24 heures
-    }
-    
-    return durationMinutes;
-  };
-
-  // Fonction pour formater la durée en minutes vers "HH:MM"
-  const formatDuration = (minutes: number): string => {
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-  };
 
   // Fonction pour charger les données BS depuis Google Sheets
-  const fetchBSData = async (): Promise<void> => {
+  const fetchBSData = async () => {
     try {
-      const bsSheetId = SHEET_ID; // Utiliser le même Sheet ID ou le remplacer par celui spécifique aux BS
+      const bsSheetId = SHEET_ID_BS; // Utiliser le même Sheet ID ou le remplacer par celui spécifique aux BS
       const bsRange = 'Data!A:P'; // Ajuster selon la structure de vos données
       
       const bsApiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${bsSheetId}/values/${bsRange}?key=${API_KEY}`;
@@ -169,10 +128,10 @@ const BS: React.FC = () => {
   };
 
   // Fonction pour analyser les données BS selon la période sélectionnée
-  const analyzeBS = (bsDataToAnalyze: BSData[], start: string, end: string): void => {
+  const analyzeBS = (bsDataToAnalyze, start, end) => {
     // Convertir les dates de string (YYYY-MM-DD) en objets Date pour la comparaison
-    let startDate: Date | null = null;
-    let endDate: Date | null = null;
+    let startDate = null;
+    let endDate = null;
     
     if (start) {
       startDate = new Date(start);
@@ -189,7 +148,7 @@ const BS: React.FC = () => {
       if (!item.Date) return false;
       
       // Convertir la date du format français ou autre en objet Date
-      let itemDate: Date | null = null;
+      let itemDate = null;
       try {
         if (item.Date.includes('/')) {
           const parts = item.Date.split('/');
@@ -232,39 +191,38 @@ const BS: React.FC = () => {
         duration // Durée en minutes
       };
     });
-    // Dans la fonction analyzeBS, ajouter après const entriesWithDuration = ...
-// Statistiques par BS
-const statsBS = {};
-entriesWithDuration.forEach(entry => {
-  const bs = entry.BS;
-  if (!bs) return;
-  
-  if (!statsBS[bs]) {
-    statsBS[bs] = {
-      count: 0,
-      totalDuration: 0,
-      lastVisit: null,
-      visits: []
-    };
-  }
-  
-  statsBS[bs].count += 1;
-  statsBS[bs].totalDuration += entry.duration;
-  
-  const visitDate = entry.Date;
-  if (!statsBS[bs].lastVisit || new Date(visitDate) > new Date(statsBS[bs].lastVisit)) {
-    statsBS[bs].lastVisit = visitDate;
-  }
-  
-  statsBS[bs].visits.push({
-    date: entry.Date,
-    start: entry["Heure début"],
-    end: entry["Heure fin"],
-    duration: entry.duration
-  });
-});
     
-
+    // Statistiques par BS
+    const statsBS = {};
+    entriesWithDuration.forEach(entry => {
+      const bs = entry.BS;
+      if (!bs) return;
+      
+      if (!statsBS[bs]) {
+        statsBS[bs] = {
+          count: 0,
+          totalDuration: 0,
+          lastVisit: null,
+          visits: []
+        };
+      }
+      
+      statsBS[bs].count += 1;
+      statsBS[bs].totalDuration += entry.duration;
+      
+      const visitDate = entry.Date;
+      if (!statsBS[bs].lastVisit || new Date(visitDate) > new Date(statsBS[bs].lastVisit)) {
+        statsBS[bs].lastVisit = visitDate;
+      }
+      
+      statsBS[bs].visits.push({
+        date: entry.Date,
+        start: entry["Heure début"],
+        end: entry["Heure fin"],
+        duration: entry.duration
+      });
+    });
+    
     // Calculer les moyennes
     Object.keys(statsBS).forEach(bs => {
       statsBS[bs].averageDuration = statsBS[bs].totalDuration / statsBS[bs].count;
@@ -281,20 +239,17 @@ entriesWithDuration.forEach(entry => {
   };
 
   useEffect(() => {
-    // Ajouter un délai pour débugger les problèmes de timing
-    const delay = (ms: number): Promise<void> => {
+    const delay = (ms) => {
       return new Promise(resolve => setTimeout(resolve, ms));
     };
 
-    const fetchGoogleSheetsData = async (): Promise<void> => {
+    const fetchGoogleSheetsData = async () => {
       try {
         setIsLoading(true);
         
-        // Ajouter un court délai pour éviter les problèmes de course condition
         await delay(100);
         
-        // Construction de l'URL pour l'API Google Sheets
-        const sheetsApiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
+        const sheetsApiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID_BS}/values/${RANGE}?key=${API_KEY}`;
         
         console.log('Récupération des données de Google Sheets:', sheetsApiUrl);
         const response = await fetch(sheetsApiUrl);
@@ -309,10 +264,8 @@ entriesWithDuration.forEach(entry => {
           throw new Error('Aucune donnée trouvée dans la feuille');
         }
         
-        // Extraire les en-têtes de la première ligne
         const headers = result.values[0];
         
-        // Trouver les indices des colonnes nécessaires
         const bsIndex = headers.findIndex(header => header === 'BS');
         const dateIndex = headers.findIndex(header => header === 'Date');
         const zoneIndex = headers.findIndex(header => header === 'Zone');
@@ -321,10 +274,8 @@ entriesWithDuration.forEach(entry => {
         const heureDebutIndex = headers.findIndex(header => header === 'Heure début');
         const heureFinIndex = headers.findIndex(header => header === 'Heure fin');
         
-        // Transformer les données en objets structurés
         const formattedData = result.values.slice(1).map((row, index) => {
-          // Extraire les coordonnées (format attendu: "49.002034, 2.591400")
-          let position: [number, number] = [0, 0];
+          let position = [0, 0];
           
           if (posIndex !== -1 && row[posIndex]) {
             const coordinates = row[posIndex].split(',').map(coord => parseFloat(coord.trim()));
@@ -333,11 +284,9 @@ entriesWithDuration.forEach(entry => {
             }
           }
           
-          // Extraire la date au format français
           const rawDate = dateIndex !== -1 && row[dateIndex] ? row[dateIndex] : '';
           
-          // Calculer la durée si les heures de début et de fin sont disponibles
-          let duration: number | null = null;
+          let duration = null;
           let formattedDuration = '';
           if (heureDebutIndex !== -1 && heureFinIndex !== -1 && row[heureDebutIndex] && row[heureFinIndex]) {
             const durationMinutes = calculateDuration(row[heureDebutIndex], row[heureFinIndex]);
@@ -348,7 +297,7 @@ entriesWithDuration.forEach(entry => {
           return {
             id: bsIndex !== -1 && row[bsIndex] ? row[bsIndex] : `prestation-${index}`,
             date: rawDate,
-            dateObj: parseDate(rawDate), // Stocke l'objet Date pour faciliter le filtrage
+            dateObj: parseDate(rawDate),
             zone: zoneIndex !== -1 && row[zoneIndex] ? row[zoneIndex] : '',
             categorie: categorieIndex !== -1 && row[categorieIndex] ? row[categorieIndex] : '',
             position: position,
@@ -359,7 +308,6 @@ entriesWithDuration.forEach(entry => {
           };
         });
         
-        // Filtrer les entrées sans coordonnées valides
         const validData = formattedData.filter(item => 
           (item.position[0] !== 0 || item.position[1] !== 0) && item.dateObj !== null
         );
@@ -368,25 +316,19 @@ entriesWithDuration.forEach(entry => {
           throw new Error('Aucune coordonnée valide trouvée dans les données');
         }
         
-        // Définir les dates par défaut (derniers 30 jours)
         const dates = validData.map(item => item.dateObj).filter(Boolean).sort((a, b) => a.getTime() - b.getTime());
         const maxDate = dates[dates.length - 1] || new Date();
         
-        // Par défaut, on filtre pour les 30 derniers jours depuis la date la plus récente
-        const defaultEndDate = new Date(maxDate.getTime());
-        const defaultStartDate = new Date(maxDate.getTime());
-        defaultStartDate.setDate(defaultStartDate.getDate());
-        
-        // Stocker toutes les prestations avant filtrage
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+              
         setAllPrestations(validData);
         
-        // Définir les dates de filtrage par défaut
-        setDateDebut(formatDateForInput(defaultStartDate));
-        setDateFin(formatDateForInput(defaultEndDate));
+        setDateDebut(formatDateForInput(today));
+        setDateFin(formatDateForInput(today));
         
         console.log("Données chargées:", validData.length, "prestations");
         
-        // Charger les données BS également
         fetchBSData();
       } catch (err) {
         console.error('Erreur:', err);
@@ -399,41 +341,34 @@ entriesWithDuration.forEach(entry => {
     fetchGoogleSheetsData();
   }, []);
 
-  // Effet pour filtrer les données lorsque les dates changent
   useEffect(() => {
     if (!allPrestations.length) return;
     
     console.log("Filtrage avec plage de dates:", dateDebut, "à", dateFin);
     console.log("Total des prestations avant filtrage:", allPrestations.length);
     
-    // Convertir les dates de string (YYYY-MM-DD) en objets Date pour la comparaison
-    let startDate: Date | 'today' = 'today';
-    let endDate: Date | 'today' = 'today';
+    let startDate = 'today';
+    let endDate = 'today';
     
     if (dateDebut) {
       startDate = new Date(dateDebut);
-      // Réinitialiser l'heure à 00:00:00 pour une comparaison correcte
       startDate.setHours(0, 0, 0, 0);
     }
     
     if (dateFin) {
       endDate = new Date(dateFin);
-      // Mettre l'heure à 23:59:59 pour inclure toute la journée
       endDate.setHours(23, 59, 59, 999);
     }
     
-    // Si aucune date n'est spécifiée, afficher toutes les prestations
     if (startDate === 'today' && endDate === 'today') {
       setFilteredPrestations(allPrestations);
       console.log("Aucune plage de dates, affichage de toutes les prestations:", allPrestations.length);
       return;
     }
     
-    // Filtrer selon les dates spécifiées
     const filtered = allPrestations.filter(item => {
       if (!item.dateObj) return false;
       
-      // Créer une nouvelle date à partir de dateObj pour éviter de modifier l'original
       const itemDate = new Date(item.dateObj.getTime());
       itemDate.setHours(0, 0, 0, 0);
       
@@ -451,15 +386,13 @@ entriesWithDuration.forEach(entry => {
     console.log("Prestations filtrées:", filtered.length);
     setFilteredPrestations(filtered);
     
-    // Mettre à jour le centre de la carte si on a des données filtrées
     if (filtered.length > 0) {
-      const newCenter: [number, number] = [
+      const newCenter = [
         filtered.reduce((sum, item) => sum + item.position[0], 0) / filtered.length,
         filtered.reduce((sum, item) => sum + item.position[1], 0) / filtered.length
       ];
       setMapCenter(newCenter);
       
-      // Ajuster le zoom en fonction du nombre de points
       if (filtered.length <= 10) {
         setMapZoom(14);
       } else if (filtered.length <= 50) {
@@ -469,50 +402,11 @@ entriesWithDuration.forEach(entry => {
       }
     }
     
-    // Mettre à jour l'analyse BS avec les nouvelles dates
     if (bsData.length > 0) {
       analyzeBS(bsData, dateDebut, dateFin);
     }
   }, [dateDebut, dateFin, allPrestations, bsData]);
 
-  // Styles pour les composants BS
-  const bsPanelStyle: React.CSSProperties = {
-    padding: '15px',
-    backgroundColor: '#f8f9fa', 
-    borderRadius: '5px',
-    marginTop: '20px',
-    marginBottom: '20px'
-  };
-
-  const tableStyle: React.CSSProperties = {
-    width: '100%',
-    borderCollapse: 'collapse',
-    marginTop: '10px'
-  };
-
-  const thStyle: React.CSSProperties = {
-    textAlign: 'left',
-    padding: '8px',
-    backgroundColor: '#e9ecef',
-    borderBottom: '1px solid #dee2e6'
-  };
-
-  const tdStyle: React.CSSProperties = {
-    padding: '8px',
-    borderBottom: '1px solid #dee2e6'
-  };
-
-  const buttonStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    backgroundColor: '#3d85c6',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    marginTop: '10px'
-  };
-
-  // Obtenir les statistiques du BS sélectionné
   const selectedBSStats = bsStats[selectedBS] || {
     count: 0,
     lastVisit: "-",
@@ -521,381 +415,476 @@ entriesWithDuration.forEach(entry => {
     visits: []
   };
 
-  // Créer un objet avec les props à passer à MapWrapper
- // const mapProps = {
-   // prestations: filteredPrestations,
-    //center: mapCenter,
-    //zoom: mapZoom
-  //};
+  const styles = {
+    container: {
+      backgroundColor: '#f8fafc',
+      minHeight: '100vh',
+      padding: '20px',
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    },
+    header: {
+      marginBottom: '32px'
+    },
+    title: {
+      fontSize: '32px',
+      fontWeight: '700',
+      color: '#1e293b',
+      marginBottom: '8px',
+      letterSpacing: '-0.025em'
+    },
+    subtitle: {
+      color: '#64748b',
+      fontSize: '16px',
+      marginBottom: '24px'
+    },
+    filterCard: {
+      padding: '24px',
+      backgroundColor: 'white',
+      borderRadius: '16px',
+      border: '1px solid #e2e8f0',
+      marginBottom: '24px',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+    },
+    filterRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px',
+      flexWrap: 'wrap'
+    },
+    filterLabel: {
+      fontWeight: '600',
+      color: '#374151',
+      fontSize: '14px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    dateLabel: {
+      fontWeight: '500',
+      color: '#64748b',
+      fontSize: '14px'
+    },
+    dateInput: {
+      padding: '8px 12px',
+      border: '1px solid #e2e8f0',
+      borderRadius: '8px',
+      fontSize: '14px',
+      width: '160px',
+      outline: 'none',
+      transition: 'border-color 0.2s ease'
+    },
+    button: {
+      padding: '8px 20px',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      border: 'none',
+      textDecoration: 'none',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    primaryButton: {
+      backgroundColor: '#3b82f6',
+      color: 'white',
+      boxShadow: '0 1px 3px rgba(59, 130, 246, 0.3)'
+    },
+    secondaryButton: {
+      backgroundColor: 'transparent',
+      color: '#64748b',
+      border: '1px solid #e2e8f0'
+    },
+    mapCard: {
+      backgroundColor: 'white',
+      borderRadius: '16px',
+      border: '1px solid #e2e8f0',
+      overflow: 'hidden',
+      marginBottom: '24px',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+    },
+    mapHeader: {
+      padding: '24px',
+      borderBottom: '1px solid #e2e8f0',
+      backgroundColor: '#f8fafc'
+    },
+    mapTitle: {
+      fontSize: '20px',
+      fontWeight: '700',
+      color: '#1e293b',
+      marginBottom: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    mapStats: {
+      display: 'flex',
+      gap: '16px',
+      marginTop: '12px'
+    },
+    statBadge: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      backgroundColor: '#eff6ff',
+      color: '#1d4ed8',
+      padding: '6px 12px',
+      borderRadius: '16px',
+      fontSize: '12px',
+      fontWeight: '600'
+    },
+    mapContainer: {
+      height: '500px',
+      position: 'relative'
+    },
+    analysisCard: {
+      backgroundColor: 'white',
+      borderRadius: '16px',
+      border: '1px solid #e2e8f0',
+      marginBottom: '24px',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+    },
+    analysisHeader: {
+      padding: '24px',
+      borderBottom: '1px solid #e2e8f0',
+      backgroundColor: '#f8fafc'
+    },
+    analysisTitle: {
+      fontSize: '20px',
+      fontWeight: '700',
+      color: '#1e293b',
+      marginBottom: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    totalDurationCard: {
+      backgroundColor: '#eff6ff',
+      padding: '16px',
+      borderRadius: '12px',
+      marginBottom: '16px'
+    },
+    totalDurationLabel: {
+      fontSize: '14px',
+      fontWeight: '600',
+      color: '#1d4ed8',
+      marginBottom: '4px'
+    },
+    totalDurationValue: {
+      fontSize: '24px',
+      fontWeight: '700',
+      color: '#1e293b'
+    },
+    select: {
+      padding: '8px 12px',
+      border: '1px solid #e2e8f0',
+      borderRadius: '8px',
+      fontSize: '14px',
+      width: '100%',
+      outline: 'none',
+      backgroundColor: 'white',
+      cursor: 'pointer'
+    },
+    selectLabel: {
+      display: 'block',
+      marginBottom: '8px',
+      fontWeight: '600',
+      color: '#374151',
+      fontSize: '14px'
+    },
+    analysisContent: {
+      padding: '24px'
+    },
+    statsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+      gap: '16px',
+      marginBottom: '24px'
+    },
+    statCard: {
+      padding: '16px',
+      backgroundColor: '#f8fafc',
+      borderRadius: '12px',
+      border: '1px solid #e2e8f0'
+    },
+    statLabel: {
+      fontSize: '12px',
+      fontWeight: '600',
+      color: '#64748b',
+      marginBottom: '4px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.025em'
+    },
+    statValue: {
+      fontSize: '20px',
+      fontWeight: '700',
+      color: '#1e293b'
+    },
+    chartCard: {
+      backgroundColor: '#f8fafc',
+      padding: '24px',
+      borderRadius: '12px',
+      border: '1px solid #e2e8f0'
+    },
+    chartTitle: {
+      fontSize: '16px',
+      fontWeight: '600',
+      color: '#1e293b',
+      marginBottom: '16px'
+    },
+    spinner: {
+      width: '48px',
+      height: '48px',
+      border: '4px solid #f1f5f9',
+      borderTop: '4px solid #3b82f6',
+      borderRadius: '50%',
+      animation: 'spin 1s linear infinite'
+    },
+    noDataCard: {
+      padding: '48px',
+      textAlign: 'center',
+      borderRadius: '16px',
+      border: '1px solid #e2e8f0',
+      backgroundColor: 'white'
+    },
+    errorCard: {
+      padding: '24px',
+      backgroundColor: '#fef2f2',
+      border: '1px solid #fecaca',
+      borderRadius: '12px'
+    }
+  };
 
-  if (isLoading) return (
-    <div className="loading-container" style={{ 
-      margin: '20px', 
-      padding: '20px', 
-      textAlign: 'center' 
-    }}>
-      Chargement des données depuis Google Sheets...
-    </div>
-  );
-  
-  if (error) return (
-    <div className="error-container" style={{ 
-      margin: '20px', 
-      padding: '20px', 
-      color: 'red',
-      backgroundColor: '#ffe6e6',
-      borderRadius: '5px' 
-    }}>
-      Erreur: {error}
-    </div>
-  );
-  
-  // Si pas de prestations trouvées dans la période
-  if (filteredPrestations.length === 0) return (
-    <div className="no-data-container" style={{ 
-      margin: '20px',
-      maxWidth: 'calc(100% - 20px)' // Pour éviter le dépassement horizontal
-    }}>
-      <h1>Carte des Prestations</h1>
-      <div className="date-filter" style={{ 
-        marginBottom: '20px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '10px'
-      }}>
-        <label>
-          Date de début:
-          <input
-            type="date"
-            value={dateDebut}
-            onChange={(e) => setDateDebut(e.target.value)}
-            style={{ marginLeft: '5px' }}
-          />
-        </label>
-        <label>
-          Date de fin:
-          <input
-            type="date"
-            value={dateFin}
-            onChange={(e) => setDateFin(e.target.value)}
-            style={{ marginLeft: '5px' }}
-          />
-        </label>
-      </div>
-      <div style={{ 
-        padding: '15px', 
-        backgroundColor: '#f8f9fa', 
-        borderRadius: '5px' 
-      }}>
-        Aucune prestation trouvée pour la période sélectionnée.
-      </div>
-      
-      {/* Section d'analyse BS même sans prestations sur la carte */}
-      <button 
-        onClick={() => setShowBSAnalysis(!showBSAnalysis)} 
-        style={buttonStyle}
-      >
-        {showBSAnalysis ? "Masquer l'analyse BS" : "Afficher l'analyse BS"}
-      </button>
-      
-      {showBSAnalysis && (
-        <div style={bsPanelStyle}>
-          <h2>Analyse des Blocs Sanitaires</h2>
-          
-          <div style={{ 
-            backgroundColor: '#e9ecef', 
-            padding: '10px', 
-            borderRadius: '4px', 
-            marginBottom: '15px' 
-          }}>
-            <h3 style={{ margin: '0 0 8px 0' }}>Durée totale sur la période</h3>
-            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{totalDuration}</div>
-          </div>
-          
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              Sélectionner un Bloc Sanitaire
-            </label>
-            <select
-              value={selectedBS}
-              onChange={(e) => setSelectedBS(e.target.value)}
-              style={{ 
-                width: '100%', 
-                padding: '8px', 
-                borderRadius: '4px', 
-                border: '1px solid #ced4da' 
-              }}
-            >
-              {bsList.map((bs) => (
-                <option key={bs} value={bs}>
-                  {bs}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          console.log("selectedBSStats.visits:", selectedBSStats.visits);
-          
-          {selectedBS && (
-            <>
-              <table style={tableStyle}>
-                <caption style={{ captionSide: 'top', textAlign: 'left', fontWeight: 'bold', marginBottom: '8px' }}>
-                  Statistiques pour {selectedBS}
-                </caption>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Métrique</th>
-                    <th style={thStyle}>Valeur</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style={tdStyle}>Nombre de visites</td>
-                    <td style={tdStyle}>{selectedBSStats.count}</td>
-                  </tr>
-                  <tr>
-                    <td style={tdStyle}>Dernière visite</td>
-                    <td style={tdStyle}>{selectedBSStats.lastVisit}</td>
-                  </tr>
-                  <tr>
-                    <td style={tdStyle}>Durée totale</td>
-                    <td style={tdStyle}>{selectedBSStats.formattedTotal}</td>
-                  </tr>
-                  <tr>
-                    <td style={tdStyle}>Durée moyenne</td>
-                    <td style={tdStyle}>{selectedBSStats.formattedAverage}</td>
-                  </tr>
-                </tbody>
-              </table>
-              
-              
-              {selectedBSStats.visits && selectedBSStats.visits.length > 0 && (
-                <div style={{ marginTop: '20px' }}>
-                  <h3 style={{ marginBottom: '10px' }}>Durées des visites (minutes)</h3>
-                  <div style={{ height: '250px', width: '100%' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                            data={selectedBSStats.visits.map((visit) => ({
-                            label: visit.date,
-                            durée: Math.round(visit.duration)
-                            }))}
-                            margin={{ top: 5, right: 30, left: 20, bottom: 50 }}
-                        >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis 
-                            dataKey="label" 
-                            angle={-45}
-                            textAnchor="end"
-                            height={60}
-                            tick={{ fontSize: 10 }}
-                            />
-                            <YAxis />
-                            <Tooltip formatter={(value) => [value, 'Minutes']} />
-                            <Legend />
-                            <Bar dataKey="durée" fill="#3d85c6" name="Durée (minutes)" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+  if (isLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '400px' 
+        }}>
+          <div style={styles.spinner}></div>
         </div>
-      )}
-    </div>
-  );
+        <style jsx>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.errorCard}>
+          <p style={{ color: '#ef4444', fontWeight: '500', margin: 0 }}>
+            Erreur: {error}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="map-container" style={{ 
-      width: '100%',
-      maxWidth: '1200px',
-      margin: '20px auto',
-      display: 'flex', 
-      flexDirection: 'column',
-      position: 'relative'
-    }}>
-      <h1 style={{ 
-        fontSize: '1.5rem', 
-        marginBottom: '10px' 
-      }}>
-        Carte des Prestations ({filteredPrestations.length})
-      </h1>
-      
-      <div className="controls" style={{ 
-        marginBottom: '10px', 
-        padding: '10px', 
-        backgroundColor: '#f0f0f0', 
-        borderRadius: '5px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '10px',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        <div className="date-filter" style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '10px'
-        }}>
-          <label>
-            Début:
+    <div style={styles.container}>
+      {/* Header */}
+      <div style={styles.header}>
+        <h1 style={styles.title}>Suivi des blocs sanitaires</h1>
+        <p style={styles.subtitle}>
+          {filteredPrestations.length} prestation{filteredPrestations.length > 1 ? 's' : ''} sur {allPrestations.length}
+        </p>
+
+        {/* Filtres de dates */}
+        <div style={styles.filterCard}>
+          <div style={styles.filterRow}>
+            <div style={styles.filterLabel}>
+              Filtrer par période
+            </div>
+            <span style={styles.dateLabel}>Du</span>
             <input
               type="date"
               value={dateDebut}
               onChange={(e) => setDateDebut(e.target.value)}
-              style={{ marginLeft: '5px' }}
+              style={styles.dateInput}
+              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+              onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
             />
-          </label>
-          <label>
-            Fin:
+            <span style={styles.dateLabel}>au</span>
             <input
               type="date"
               value={dateFin}
               onChange={(e) => setDateFin(e.target.value)}
-              style={{ marginLeft: '5px' }}
+              style={styles.dateInput}
+              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+              onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
             />
-          </label>
+            {(dateDebut || dateFin) && (
+              <button
+                onClick={() => {
+                  setDateDebut('');
+                  setDateFin('');
+                  setFilteredPrestations(allPrestations);
+                }}
+                style={{...styles.button, ...styles.secondaryButton}}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#f8fafc';
+                  e.target.style.borderColor = '#cbd5e1';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'transparent';
+                  e.target.style.borderColor = '#e2e8f0';
+                }}
+              >
+                Réinitialiser
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Carte */}
+      <div style={styles.mapCard}>
+        <div style={styles.mapHeader}>
+          <h2 style={styles.mapTitle}>
+            🗺️ Localisation des prestations
+          </h2>
+          <div style={styles.mapStats}>
+            <div style={styles.statBadge}>
+              📍 {filteredPrestations.length} point{filteredPrestations.length > 1 ? 's' : ''}
+            </div>
+            {filteredPrestations.length > 0 && (
+              <div style={styles.statBadge}>
+                🕒 {filteredPrestations.filter(p => p.formattedDuration).length} avec durée
+              </div>
+            )}
+          </div>
         </div>
         
-        <div className="stats">
-          <span><strong>{filteredPrestations.length}</strong> / {allPrestations.length} prestations</span>
+        <div style={styles.mapContainer}>
+          <MapWrapper 
+            prestations={filteredPrestations} 
+            center={mapCenter}
+            zoom={mapZoom}
+          />
         </div>
       </div>
-      
-      <div className="map-display-container" style={{ 
-        width: '100%',
-        height: '600px',
-        position: 'relative',
-        borderRadius: '8px',
-        border: '1px solid #ccc',
-        overflow: 'hidden',
-        marginBottom: '20px'
-      }}>
-        {/* Utiliser le composant MapWrapper pour afficher la carte */}
-        <MapWrapper 
-          prestations={filteredPrestations} 
-          center={mapCenter}
-          zoom={mapZoom}
-        />
+
+      {/* Bouton d'analyse BS */}
+      <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+        <button 
+          onClick={() => setShowBSAnalysis(!showBSAnalysis)} 
+          style={{...styles.button, ...styles.primaryButton}}
+          onMouseEnter={(e) => e.target.style.backgroundColor = '#2563eb'}
+          onMouseLeave={(e) => e.target.style.backgroundColor = '#3b82f6'}
+        >
+          {showBSAnalysis ? "🔽 Masquer l'analyse BS" : "🔼 Afficher l'analyse BS"}
+        </button>
       </div>
-      
-      {/* Bouton pour afficher/masquer l'analyse BS */}
-      <button 
-        onClick={() => setShowBSAnalysis(!showBSAnalysis)} 
-        style={{
-          padding: '8px 12px',
-          backgroundColor: '#3d85c6',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          marginTop: '20px'
-        }}
-      >
-        {showBSAnalysis ? "Masquer l'analyse BS" : "Afficher l'analyse BS"}
-      </button>
       
       {/* Section d'analyse BS */}
       {showBSAnalysis && (
-        <div style={bsPanelStyle}>
-          <h2>Analyse des Blocs Sanitaires</h2>
-          
-          <div style={{ 
-            backgroundColor: '#e9ecef', 
-            padding: '10px', 
-            borderRadius: '4px', 
-            marginBottom: '15px' 
-          }}>
-            <h3 style={{ margin: '0 0 8px 0' }}>Durée totale sur la période</h3>
-            <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{totalDuration}</div>
-          </div>
-          
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              Sélectionner un Bloc Sanitaire
-            </label>
-            <select
-              value={selectedBS}
-              onChange={(e) => setSelectedBS(e.target.value)}
-              style={{ 
-                width: '100%', 
-                padding: '8px', 
-                borderRadius: '4px', 
-                border: '1px solid #ced4da' 
-              }}
-            >
-              {bsList.map((bs) => (
-                <option key={bs} value={bs}>
-                  {bs}
-                </option>
-              ))}
-            </select>
+        <div style={styles.analysisCard}>
+          <div style={styles.analysisHeader}>
+            <h2 style={styles.analysisTitle}>
+              Analyse des blocs sanitaires
+            </h2>
+            
+            <div style={styles.totalDurationCard}>
+              <div style={styles.totalDurationLabel}>Durée totale sur la période</div>
+              <div style={styles.totalDurationValue}>{totalDuration}</div>
+            </div>
+            
+            <div>
+              <label style={styles.selectLabel}>
+                Sélectionner un bloc sanitaire
+              </label>
+              <select
+                value={selectedBS}
+                onChange={(e) => setSelectedBS(e.target.value)}
+                style={styles.select}
+                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+              >
+                {bsList.map((bs) => (
+                  <option key={bs} value={bs}>
+                    {bs}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           
           {selectedBS && (
-            <>
-              <table style={tableStyle}>
-                <caption style={{ captionSide: 'top', textAlign: 'left', fontWeight: 'bold', marginBottom: '8px' }}>
-                  Statistiques pour {selectedBS}
-                </caption>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Métrique</th>
-                    <th style={thStyle}>Valeur</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style={tdStyle}>Nombre de visites</td>
-                    <td style={tdStyle}>{selectedBSStats.count}</td>
-                  </tr>
-                  <tr>
-                    <td style={tdStyle}>Dernière visite</td>
-                    <td style={tdStyle}>{selectedBSStats.lastVisit}</td>
-                  </tr>
-                  <tr>
-                    <td style={tdStyle}>Durée totale</td>
-                    <td style={tdStyle}>{selectedBSStats.formattedTotal}</td>
-                  </tr>
-                  <tr>
-                    <td style={tdStyle}>Durée moyenne</td>
-                    <td style={tdStyle}>{selectedBSStats.formattedAverage}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div style={styles.analysisContent}>
+              <h3 style={{ marginBottom: '16px', color: '#1e293b' }}>
+                Statistiques pour {selectedBS}
+              </h3>
+              
+              <div style={styles.statsGrid}>
+                <div style={styles.statCard}>
+                  <div style={styles.statLabel}>Nombre de visites</div>
+                  <div style={styles.statValue}>{selectedBSStats.count}</div>
+                </div>
+                <div style={styles.statCard}>
+                  <div style={styles.statLabel}>Dernière visite</div>
+                  <div style={styles.statValue}>{selectedBSStats.lastVisit}</div>
+                </div>
+                <div style={styles.statCard}>
+                  <div style={styles.statLabel}>Durée totale</div>
+                  <div style={styles.statValue}>{selectedBSStats.formattedTotal}</div>
+                </div>
+                <div style={styles.statCard}>
+                  <div style={styles.statLabel}>Durée moyenne</div>
+                  <div style={styles.statValue}>{selectedBSStats.formattedAverage}</div>
+                </div>
+              </div>
               
               {selectedBSStats.visits && selectedBSStats.visits.length > 0 && (
-                <div style={{ marginTop: '20px' }}>
-                  <h3 style={{ marginBottom: '10px' }}>Durées des visites (minutes)</h3>
-                  <div style={{ height: '250px', width: '100%' }}>
+                <div style={styles.chartCard}>
+                  <h4 style={styles.chartTitle}>📊 Durées des visites (minutes)</h4>
+                  <div style={{ height: '300px', width: '100%' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={selectedBSStats.visits.map((visit) => ({
-                        label: visit.date.substring(0, 5), // Format court de la date
-                        durée: Math.round(visit.duration)
+                        data={selectedBSStats.visits.map((visit, index) => ({
+                          id: index + 1,
+                          date: visit.date,
+                          durée: Math.round(visit.duration)
                         }))}
                         margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                            dataKey="label" 
-                            angle={-45}
-                            textAnchor="end"
-                            height={70}
-                            />
+                        <XAxis dataKey="id" />
                         <YAxis />
                         <Tooltip formatter={(value) => [value, 'Minutes']} />
                         <Legend />
-                        <Bar dataKey="durée" fill="#3d85c6" name="Durée (minutes)" />
+                        <Bar dataKey="durée" fill="#3b82f6" name="Durée (minutes)" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       )}
+
+      {filteredPrestations.length === 0 && (
+        <div style={styles.noDataCard}>
+          <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
+            Aucune prestation trouvée pour la période sélectionnée
+          </p>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
