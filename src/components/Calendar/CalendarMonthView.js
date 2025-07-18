@@ -67,9 +67,9 @@ const CalendarMonthView = ({ month, year, deployments }) => {
     const locationColors = {
       'GALERIE DEP T2C': 'bg-red-100 text-red-800',
       'T1 / ZONE OUEST': 'bg-blue-400 text-blue-800',
-      'T1 / ZONE EST': 'bg-green-400 text-green-800',
+      'T1 / ZONE EST': 'bg-red-400 text-green-800',
       'T1 / ZONE SUD': 'bg-yellow-400 text-yellow-800',
-      'T1 / ZONE NORD': 'bg-red-400 text-yellow-800',
+      'T1 / ZONE NORD': 'bg-green-400 text-yellow-800',
     };
     return locationColors[location] || 'bg-gray-100 text-gray-800';  // Couleur par défaut si le lieu n'est pas trouvé
   };
